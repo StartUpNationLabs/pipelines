@@ -8,6 +8,7 @@ description: A filter pipeline that uses Langfuse.
 requirements: langfuse
 """
 
+import logging
 import os
 import uuid
 from typing import List, Optional
@@ -17,6 +18,14 @@ from langfuse.api.resources.commons.errors.unauthorized_error import Unauthorize
 from pydantic import BaseModel
 
 from utils.pipelines.main import get_last_assistant_message
+
+# Configure logging
+log_level = os.getenv("LOG_LEVEL", "INFO")
+log_level = logging.getLevelName(log_level)
+logging.basicConfig(
+    level=log_level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 
 def get_last_assistant_message_obj(messages: List[dict]) -> dict:
@@ -50,11 +59,11 @@ class Pipeline:
         self.chat_generations = {}
 
     async def on_startup(self):
-        print(f"on_startup:{__name__}")
+        logger.info("Starting up Langfuse Filter Pipeline")
         self.set_langfuse()
 
     async def on_shutdown(self):
-        print(f"on_shutdown:{__name__}")
+        logger.info("Shutting down Langfuse Filter Pipeline")
         self.langfuse.flush()
 
     async def on_valves_updated(self):
@@ -70,18 +79,18 @@ class Pipeline:
             )
             self.langfuse.auth_check()
         except UnauthorizedError:
-            print(
+            logger.error(
                 "Langfuse credentials incorrect. Please re-enter your Langfuse credentials in the pipeline settings."
             )
         except Exception as e:
-            print(
+            logger.error(
                 f"Langfuse error: {e} Please re-enter your Langfuse credentials in the pipeline settings."
             )
 
     async def inlet(self, body: dict, user: Optional[dict] = None) -> dict:
-        print(f"inlet:{__name__}")
-        print(f"Received body: {body}")
-        print(f"User: {user}")
+        logger.info(f"Processing inlet pipeline: {__name__}")
+        logger.debug(f"Processing request body: {body}")
+        logger.debug(f"User context: {user}")
 
         # Skip processing if the request is a task
         is_task: bool = body.get("metadata", {}).get("task", "") != ""
@@ -101,9 +110,9 @@ class Pipeline:
 
         if missing_keys:
             error_message = (
-                f"Error: Missing keys in the request body: {', '.join(missing_keys)}"
+                f"Missing keys in the request body: {', '.join(missing_keys)}"
             )
-            print(error_message)
+            logger.error(error_message)
             raise ValueError(error_message)
 
         trace = self.langfuse.trace(
@@ -127,8 +136,8 @@ class Pipeline:
         return body
 
     async def outlet(self, body: dict, user: Optional[dict] = None) -> dict:
-        print(f"outlet:{__name__}")
-        print(f"Received body: {body}")
+        logger.info(f"Processing outlet pipeline: {__name__}")
+        logger.debug(f"Processing response body: {body}")
 
         # Skip processing if the request is a task
         is_task: bool = body.get("metadata", {}).get("task", "") != ""
@@ -140,7 +149,7 @@ class Pipeline:
         chat_id = body.get("chat_id") or body.get("metadata", {}).get("chat_id")
 
         if chat_id not in self.chat_generations or chat_id not in self.chat_traces:
-            print("Langfuse trace not found for this chat_id in outlet")
+            logger.warning("Langfuse trace not found for this chat_id in outlet")
             return body
 
         trace = self.chat_traces[chat_id]
