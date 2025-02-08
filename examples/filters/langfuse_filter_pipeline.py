@@ -20,10 +20,8 @@ from pydantic import BaseModel
 from utils.pipelines.main import get_last_assistant_message
 
 # Configure logging
-log_level = os.getenv("LOG_LEVEL", "INFO")
-log_level = logging.getLevelName(log_level)
 logging.basicConfig(
-    level=log_level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -42,6 +40,7 @@ class Pipeline:
         secret_key: str
         public_key: str
         host: str
+        log_level: str = "INFO"
 
     def __init__(self):
         self.type = "filter"
@@ -52,11 +51,13 @@ class Pipeline:
                 "secret_key": os.getenv("LANGFUSE_SECRET_KEY", "your-secret-key-here"),
                 "public_key": os.getenv("LANGFUSE_PUBLIC_KEY", "your-public-key-here"),
                 "host": os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
+                "log_level": os.getenv("LOG_LEVEL", "INFO"),
             }
         )
         self.langfuse = None
         self.chat_traces = {}
         self.chat_generations = {}
+        logger.setLevel(self.valves.log_level)
 
     async def on_startup(self):
         logger.info("Starting up Langfuse Filter Pipeline")
